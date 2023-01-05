@@ -11,9 +11,6 @@ from rouge import Rouge
 from utils import *
 import streamlit as st
 
-openai.api_key = "<INSERT YOUR OWN KEY HERE>"
-
-
 def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
     """
     Extract start and end times for each speaker and the corresponding speakers
@@ -90,6 +87,7 @@ def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_mo
 
 
 def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
+    openai.api_key = "<INSERT YOUR OWN KEY HERE>"
     tokens_used_so_far = 0
     transcription_chunk = ""
     if no_tokens < max_tokens_model:
@@ -107,7 +105,8 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                 {response.choices[0].text}"
         )
     else:
-        print(f"There are more tokens than supported by the model.")
+        st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
+                 f"allowed context length.")
         summaries = []
         for sentence in str_trans_sp:
             if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
@@ -126,7 +125,7 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                     presence_penalty=0,
                 )
                 summaries.append(response.choices[0].text)
-                print(f"Current summary is {response.choices[0].text}")
+                # print(f"Current summary is {response.choices[0].text}")
                 transcription_chunk = sentence
                 tokens_used_so_far = len(sentence.split())
 
@@ -141,37 +140,45 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                 presence_penalty=0,
             )
             summaries.append(response.choices[0].text)
-            print(f"Current summary is {response.choices[0].text}")
-        print(f"List of summaries so far: {summaries}\n")
+            # print(f"Current summary is {response.choices[0].text}")
+        # print(f"List of summaries so far: {summaries}\n")
         concat_summaries = " ".join(summaries)
-        print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
+        # print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
+        st.write("##### Concatenated summary is:")
+        st.write(f"#### {concat_summaries}")
+
+        # Now summarising the concatenated summaries either with Tl;dr or Summarize
         response = openai.Completion.create(
             model="text-davinci-002",
-            prompt=f"{transcription_chunk}\nTl;dr",
+            prompt=f"{concat_summaries}\nTl;dr:",
             temperature=0.6,
             max_tokens=250,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0,
         )
-        print(
-            f"When using {sum_model} summary is:\n\
-                {response.choices[0].text}"
-        )
+        # print(
+        #     f"When using {sum_model} summary is:\n\
+        #         {response.choices[0].text}"
+        # )
+        st.write("##### Concatenated summary is and passed through Tl;dr GPT3:")
+        st.write(f"#### {response.choices[0].text}")
+
         response_sum = openai.Completion.create(
             model="text-davinci-002",
-            prompt=f"{transcription_chunk}\nSummarize",
+            prompt=f"{concat_summaries}\nSummarize:",
             temperature=0.6,
             max_tokens=250,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0,
         )
-        print(
-            f"When using {sum_model} summary is:\n\
-                {response_sum.choices[0].text}"
-        )
-
+        # print(
+        #     f"When using {sum_model} summary is:\n\
+        #         {response_sum.choices[0].text}"
+        # )
+        st.write("##### Concatenated summary is and passed through Summarize GPT3:")
+        st.write(f"#### {response_sum.choices[0].text}")
 
 def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
