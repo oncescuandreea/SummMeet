@@ -9,6 +9,7 @@ from transformers import pipeline
 
 from rouge import Rouge
 from utils import *
+import streamlit as st
 
 openai.api_key = "<INSERT YOUR OWN KEY HERE>"
 
@@ -30,7 +31,7 @@ def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
     return start_end_times, speakers
 
 
-def using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model):
+def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_model: str):
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
     tokens_used_so_far = 0
@@ -41,7 +42,9 @@ def using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model):
         )
         # print(f"When using {sum_model} summary is:\n {summary}")
     else:
-        print(f"There are more tokens than supported by the model.")
+        # print(f"There are more tokens than supported by the model.")
+        st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
+                 f"allowed context length.")
         summaries = []
         for sentence in str_trans_sp:
             if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
@@ -57,7 +60,7 @@ def using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                     do_sample=False,
                 )
                 summaries.append(summary[0]["summary_text"])
-                print(f"Current summary is {summary[0]}")
+                # print(f"Current summary is {summary[0]}")
                 transcription_chunk = sentence
                 tokens_used_so_far = len(sentence.split())
 
@@ -69,16 +72,18 @@ def using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                 do_sample=False,
             )
             summaries.append(summary[0]["summary_text"])
-        print(f"List of summaries so far: {summaries}\n")
+        # print(f"List of summaries so far: {summaries}\n")
         concat_summaries = " ".join(summaries)
-        print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
+        # print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
         summary = summarizer(
             f'""{transcription_chunk}""',
             max_length=150,
             min_length=50,
             do_sample=False,
         )
-        print(f"When using {sum_model} final summary is:\n {summary}")
+        # print(f"When using {sum_model} final summary is:\n {summary}")
+        st.write("##### Final summary is:")
+        st.write(f"#### {summary[0]['summary_text']}")
     with open(f"data/bart_summaries/experiment.txt", "w") as f:
         f.write(summary[0]["summary_text"])
     return summary[0]["summary_text"]
@@ -222,6 +227,50 @@ def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
     return summary[0]["summary_text"]
 
 
+def generate_summary(str_trans_sp):
+    st.write("Input transcription is:", str_trans_sp)
+    no_tokens = 0
+    for utterance in str_trans_sp:
+        no_tokens += len(utterance.split())
+    st.write(f"There are {no_tokens} tokens in this transcript separated by spaces")
+
+    # summarize using chosen models
+    options = st.multiselect(
+        'What model/models do you want to use? Select the label "Done" when you are done',
+        options=['', 'BART', 'GPT3', 'Done', 'Blue'])
+    if options == '':
+        st.write("Script will pause until a valid option is selected")
+    elif 'Done' not in options:
+        st.write("Script will pause until label 'Done' is also added")
+    else:
+        st.write(f"Using the following models:  {options}")
+        # models = ["BART", "GPT3"]
+        models = [option for option in options if option != "Done"]
+        # models = ["BART"]
+        max_tokens_real = {
+            "BART": 1024,
+            "GPT3": 2048,
+            "DialogueLM": 5120,
+            "DialogueLMSparse": 8192,
+        }
+        max_tokens = {
+            "BART": 600,
+            "GPT3": 1600,
+            "DialogueLM": 4700,
+            "DialogueLMSparse": 7600,
+        }  # number of tokens is not exactly number of words so using a lower upper limit
+        for sum_model in models:
+            st.write(f"## Using {sum_model} for summarization")
+            assert sum_model in ["BART", "GPT3"], "Model not supported yet"
+            max_tokens_model = max_tokens[sum_model]
+            if sum_model == "BART":
+                using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+            elif sum_model == "GPT3":
+                using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+            elif sum_model == "Longformer":
+                using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extracts meeting minutes")
     parser.add_argument(
@@ -237,7 +286,7 @@ def main():
         type=Path,
         # default=os.path.join(project_dir, 'data/ami-summary/'),
         # default="/scratch/shared/beegfs/oncescu/shared-datasets/dialogue/test_meeting.mp4",
-        default="/scratch/shared/beegfs/oncescu/coding/libs/pt/AMICorpusXML/data/ami-transcripts-dicttime-nosp/ES2008a.transcript.txt",
+        default="./data/AMICorpus/ES2008a.transcript.txt",
         help="Location of audio/video/transcript. Currently only takes one file",
     )
     parser.add_argument(
@@ -249,8 +298,17 @@ def main():
         help="How many sentences per group are being summarised",
     )
     args = parser.parse_args()
-    if args.input_type != "transcript":
-
+    st.title("Meeting summarization")
+    input_type = st.selectbox(
+        "Set type of input data:",
+        key="input_type",
+        options=["", "transcript", "video", "audio"],
+    )
+    if input_type == "":
+        st.write("Script will pause until a valid option is selected")
+    elif input_type != "transcript":
+        # if args.input_type != "transcript":
+        st.write("### Am audio file needs to be uploaded. Currently using demo one")
         # extract audio from video if needed since currently only using audio for diarization
         desired_audio_type = "wav"
         file_name = str(args.file_path).rsplit("/", 1)[1].rsplit(".", 1)[0]
@@ -272,39 +330,13 @@ def main():
         str_trans_sp = ""
         for idx, transcription in enumerate(tqdm.tqdm(transcriptions)):
             str_trans_sp += f"{speakers[idx]}: {transcription}\n "
-        print(f"Transcription is:\n {str_trans_sp}")
+        # print("Transcription is:\n {str_trans_sp}")
+        generate_summary(str_trans_sp)
     else:
+        st.write("### A transcript needs to be uploaded. Currently using demo one")
         with open(args.file_path, "r") as f:
             str_trans_sp = f.read().splitlines()
-    no_tokens = 0
-    for utterance in str_trans_sp:
-        no_tokens += len(utterance.split())
-    print(no_tokens)
-
-    # summarize using chosen models
-    # models = ["BART", "GPT3"]
-    models = ["BART"]
-    max_tokens_real = {
-        "BART": 1024,
-        "GPT3": 2048,
-        "DialogueLM": 5120,
-        "DialogueLMSparse": 8192,
-    }
-    max_tokens = {
-        "BART": 600,
-        "GPT3": 1600,
-        "DialogueLM": 4700,
-        "DialogueLMSparse": 7600,
-    }  # number of tokens is not exactly number of words so using a lower upper limit
-    for sum_model in models:
-        assert sum_model in ["BART", "GPT3"], "Model not supported yet"
-        max_tokens_model = max_tokens[sum_model]
-        if sum_model == "BART":
-            using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model)
-        elif sum_model == "GPT3":
-            using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model)
-        elif sum_model == "Longformer":
-            using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+        generate_summary(str_trans_sp)
 
 
 if __name__ == "__main__":
