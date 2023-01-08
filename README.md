@@ -6,6 +6,8 @@ Can choose from BART and GPT currently to generate summaries.
 
 Only inputting text has been tested.
 
+Text file containing transcript needs to have the utterances of each speaker on a new line.
+
 ---------------
 ### Examples:
 ![BERT summary](misc/BERT_example.png "BERT summary")

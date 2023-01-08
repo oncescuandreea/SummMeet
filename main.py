@@ -11,6 +11,12 @@ from rouge import Rouge
 from utils import *
 import streamlit as st
 
+from io import StringIO
+import pandas as pd
+
+from pathlib import Path
+
+
 def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
     """
     Extract start and end times for each speaker and the corresponding speakers
@@ -43,7 +49,13 @@ def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_mo
         st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
                  f"allowed context length.")
         summaries = []
-        for sentence in str_trans_sp:
+
+        total_progress = 0.0
+        my_bar = st.progress(total_progress)
+        no_sentences = len(str_trans_sp)
+        delta_progress = 1.0 / no_sentences
+
+        for idx, sentence in enumerate(str_trans_sp):
             if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
                 transcription_chunk += sentence
                 tokens_used_so_far += len(sentence.split())
@@ -60,6 +72,8 @@ def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_mo
                 # print(f"Current summary is {summary[0]}")
                 transcription_chunk = sentence
                 tokens_used_so_far = len(sentence.split())
+            my_bar.progress(min(1.0, total_progress + delta_progress))
+            total_progress += delta_progress
 
         if transcription_chunk != "":
             summary = summarizer(
@@ -71,9 +85,12 @@ def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_mo
             summaries.append(summary[0]["summary_text"])
         # print(f"List of summaries so far: {summaries}\n")
         concat_summaries = " ".join(summaries)
-        # print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
+        st.write("##### Concatenated summary is:")
+        st.write(f"#### {concat_summaries}")
+
+        # Now summarising the concatenated summaries using the same model
         summary = summarizer(
-            f'""{transcription_chunk}""',
+            f'""{concat_summaries}""',
             max_length=150,
             min_length=50,
             do_sample=False,
@@ -108,6 +125,12 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
         st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
                  f"allowed context length.")
         summaries = []
+
+        total_progress = 0.0
+        my_bar = st.progress(total_progress)
+        no_sentences = len(str_trans_sp)
+        delta_progress = 1.0 / no_sentences
+
         for sentence in str_trans_sp:
             if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
                 transcription_chunk += sentence
@@ -128,6 +151,8 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
                 # print(f"Current summary is {response.choices[0].text}")
                 transcription_chunk = sentence
                 tokens_used_so_far = len(sentence.split())
+            my_bar.progress(min(1.0, total_progress + delta_progress))
+            total_progress += delta_progress
 
         if transcription_chunk != "":
             response = openai.Completion.create(
@@ -163,6 +188,8 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
         # )
         st.write("##### Concatenated summary is and passed through Tl;dr GPT3:")
         st.write(f"#### {response.choices[0].text}")
+        with open(f"data/gpt_summaries/experiment_concat.txt", "w") as f:
+            f.write(response.choices[0].text)
 
         response_sum = openai.Completion.create(
             model="text-davinci-002",
@@ -179,6 +206,10 @@ def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
         # )
         st.write("##### Concatenated summary is and passed through Summarize GPT3:")
         st.write(f"#### {response_sum.choices[0].text}")
+        "data/gpt_summaries".mkdir(parents=True, exist_ok=True)
+    with open(f"data/gpt_summaries/experiment_short.txt", "w") as f:
+        f.write(response_sum.choices[0].text)
+
 
 def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -234,7 +265,7 @@ def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
     return summary[0]["summary_text"]
 
 
-def generate_summary(str_trans_sp):
+def generate_summary(str_trans_sp, args):
     st.write("Input transcription is:", str_trans_sp)
     no_tokens = 0
     for utterance in str_trans_sp:
@@ -273,7 +304,7 @@ def generate_summary(str_trans_sp):
             if sum_model == "BART":
                 using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model)
             elif sum_model == "GPT3":
-                using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+                using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model, args)
             elif sum_model == "Longformer":
                 using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
 
@@ -303,6 +334,11 @@ def main():
         # default="/scratch/shared/beegfs/oncescu/shared-datasets/dialogue/test_meeting.mp4",
         default=8,
         help="How many sentences per group are being summarised",
+    )
+    parser.add_argument(
+        "--openai_key",
+        type=str,
+        help="OpenAI token to be able to use GPT3",
     )
     args = parser.parse_args()
     st.title("Meeting summarization")
@@ -340,10 +376,33 @@ def main():
         # print("Transcription is:\n {str_trans_sp}")
         generate_summary(str_trans_sp)
     else:
-        st.write("### A transcript needs to be uploaded. Currently using demo one")
-        with open(args.file_path, "r") as f:
-            str_trans_sp = f.read().splitlines()
-        generate_summary(str_trans_sp)
+        upload_or_not = st.selectbox(
+            "Do you want to upload a file or use the default?",
+            key="upload_or_not",
+            options=["", "Upload", "Default", "Select from existent"],
+        )
+        if upload_or_not == "":
+            st.write("Script is waiting for selecting Yes or No")
+        elif upload_or_not == "Default":
+            st.write("### A transcript needs to be uploaded. Currently using demo one")
+            with open(args.file_path, "r") as f:
+                str_trans_sp = f.read().splitlines()
+            generate_summary(str_trans_sp, args)
+        elif upload_or_not in ["Upload", "Select from existent"]:
+            uploaded_file = st.file_uploader("Choose a .txt file", type=["txt"])
+            if uploaded_file is not None:
+                file_details = {"FileName": uploaded_file.name, "FileType": uploaded_file.type}
+                st.write(file_details)
+                save_location = Path("C:/Users/oncescu/coding/meeting_summaries/data/AMICorpus/")
+                with open(os.path.join(save_location, uploaded_file.name), "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                st.success("Saved File")
+                with open(os.path.join(save_location, uploaded_file.name), "r") as f:
+                    str_trans_sp = f.read().splitlines()
+                generate_summary(str_trans_sp, args)
+            else:
+                st.write("Waiting for file to be uploaded")
+
 
 
 if __name__ == "__main__":
