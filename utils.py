@@ -5,6 +5,9 @@ import whisper
 from moviepy.editor import *
 from pydub import AudioSegment
 
+import youtube_dl
+import streamlit as st
+
 
 def extract_audio(desired_audio_type, file_path, file_name):
     """
@@ -16,18 +19,21 @@ def extract_audio(desired_audio_type, file_path, file_name):
     assert desired_audio_type in ["mp3", "wav"], "Desired audio type not supported"
     if desired_audio_type == "mp3":
         video = VideoFileClip(str(file_path))
-
-        if os.path.exists(file_path.parent / f"{file_name}.mp3") is False:
-            video.audio.write_audiofile(str(file_path.parent / f"{file_name}.mp3"))
+        # if os.path.exists(file_path.parent / f"{file_name}.mp3") is False:
+        if os.path.exists(os.path.join(file_path.parent, f"{file_name}.mp3")) is False:
+            video.audio.write_audiofile(str(os.path.join(file_path.parent, f"{file_name}.mp3")))
         else:
-            print("Already extracted mp3 version of this video")
+            st.write("Already extracted mp3 version of this video")
     elif desired_audio_type == "wav":
-        if os.path.exists(file_path.parent / f"{file_name}.wav") is False:
-            command = f"ffmpeg -i {str(file_path)} -ab 160k -ac 2 -ar 44100 -vn {str(file_path.parent / f'{file_name}.wav')}"
-
+        st.write("Got hereee")
+        # if os.path.exists(file_path.parent / f"{file_name}.wav") is False:
+        if os.path.exists(os.path.join(file_path.parent, f"{file_name}.wav")) is False:
+            st.write("Got hereee 2")
+            command = f"ffmpeg -i {str(file_path)} -ab 160k -ac 2 -ar 44100 -vn {str(os.path.join(file_path.parent, f'{file_name}.wav'))}"
+            st.write(f"{os.path.join(file_path.parent, f'{file_name}.wav')}")
             subprocess.call(command, shell=True)
         else:
-            print("Already extracted wav version of this video")
+            st.write("Already extracted wav version of this video")
 
 
 def get_transcriptions(
@@ -53,3 +59,31 @@ def get_transcriptions(
         # print(f"{speakers[idx]}:{test_meeting_0_tr}\n")
         transcriptions.append(test_meeting_0_tr["text"])
     return transcriptions
+
+
+def download_audio_only(cwd, youtube_id):
+
+    # for video_link in list_video_links:
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'postprocessors': [],
+        'writeinfojson': True,
+        'writesubtitles': True,
+        'outtmpl': "/data/media/%(title)s.%(ext)s",
+    }
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([f"http://www.youtube.com/watch?v={youtube_id}"])
+
+
+def download_full_yb(youtube_id):
+
+    # for video_link in list_video_links:
+    ydl_opts = {
+        'postprocessors': [],
+        'format': 134,
+        # 'outtmpl': "/data/media/%(title)s.%(ext)s",
+        'outtmpl': f"/data/media/{youtube_id}.%(ext)s",
+    }
+
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([f"http://www.youtube.com/watch?v={youtube_id}"])

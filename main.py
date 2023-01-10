@@ -15,6 +15,7 @@ from io import StringIO
 import pandas as pd
 
 from pathlib import Path
+from sys import platform
 
 
 def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
@@ -103,8 +104,8 @@ def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_mo
     return summary[0]["summary_text"]
 
 
-def using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model):
-    openai.api_key = "<INSERT YOUR OWN KEY HERE>"
+def using_GPT3(no_tokens: int, max_tokens_model: int, str_trans_sp: str, sum_model, args):
+    openai.api_key = args.openai_key
     tokens_used_so_far = 0
     transcription_chunk = ""
     if no_tokens < max_tokens_model:
@@ -309,20 +310,69 @@ def generate_summary(str_trans_sp, args):
                 using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
 
 
+def generate_summary_from_txt(file_loc, args):
+    with open(file_loc, "r") as f:
+        str_trans_sp = f.read().splitlines()
+    generate_summary(str_trans_sp, args)
+
+
+def generate_summary_from_audvid(args, file_path, youtube_id=None):
+    desired_audio_type = "wav"
+    st.write(file_path)
+    st.write(file_path.parent)
+    if "win" in platform:
+        file_name = str(file_path).rsplit("\\", 1)[1].rsplit(".", 1)[0]
+    else:
+        file_name = str(file_path).rsplit("/", 1)[1].rsplit(".", 1)[0]
+    st.write(file_name)
+    if ".mp4" in str(file_path):
+        st.write("Extracting audio from video")
+        extract_audio(desired_audio_type, file_path, file_name)
+
+    # extract speakers and their moments
+    pipeline_diar = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1",
+                                             use_auth_token=args.diar_auth_key)
+
+    st.write("Now diarizing speech to obtain time intervals for each utterance")
+    start_end_times, speakers = dizarization_fct(
+        pipeline_diar, file_path, file_name, desired_audio_type
+    )
+
+    # whisper now to get transcripts
+    st.write("Now using Whisper to get transcriptions")
+    transcriptions = get_transcriptions(
+        start_end_times, file_path, file_name, desired_audio_type, speakers
+    )
+
+    # get transcriptions in desired str form for future summarization
+    str_trans_sp = ""
+    no_utterances = len(transcriptions)
+    total_progress = 0.0
+    my_bar = st.progress(total_progress)
+    delta_progress = 1.0 / no_utterances
+    st.write("Now generating txt file containing transcript")
+    for idx, transcription in enumerate(tqdm.tqdm(transcriptions)):
+        str_trans_sp += f"{speakers[idx]}: {transcription}\n "
+        my_bar.progress(min(1.0, total_progress + delta_progress))
+        total_progress += delta_progress
+    (Path("./data/transcripts")).mkdir(parents=True, exist_ok=True)
+    if youtube_id is not None:
+        with open(Path(f"./data/transcripts/{youtube_id}.txt"), "w") as f:
+            f.write(str_trans_sp)
+    else:
+        with open(Path(f"./data/transcripts/your_transcript.txt"), "w") as f:
+            f.write(str_trans_sp)
+    # print("Transcription is:\n {str_trans_sp}")
+    st.write("Transcript is:")
+    st.write(str_trans_sp)
+    # generate_summary(str_trans_sp, args)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extracts meeting minutes")
     parser.add_argument(
-        "--input_type",
-        type=str,
-        # default=os.path.join(project_dir, 'data/ami-summary/'),
-        default="transcript",
-        choices=["transcript", "video", "audio"],
-        help="Type of input data. Can be audio, video or transcripts",
-    )
-    parser.add_argument(
         "--file_path",
         type=Path,
-        # default=os.path.join(project_dir, 'data/ami-summary/'),
         # default="/scratch/shared/beegfs/oncescu/shared-datasets/dialogue/test_meeting.mp4",
         default="./data/AMICorpus/ES2008a.transcript.txt",
         help="Location of audio/video/transcript. Currently only takes one file",
@@ -330,8 +380,6 @@ def main():
     parser.add_argument(
         "--group_size",
         type=int,
-        # default=os.path.join(project_dir, 'data/ami-summary/'),
-        # default="/scratch/shared/beegfs/oncescu/shared-datasets/dialogue/test_meeting.mp4",
         default=8,
         help="How many sentences per group are being summarised",
     )
@@ -339,6 +387,11 @@ def main():
         "--openai_key",
         type=str,
         help="OpenAI token to be able to use GPT3",
+    )
+    parser.add_argument(
+        "--diar_auth_key",
+        type=str,
+        help="HuggingFace token to be able to use diarization tool. Need to accept terms and conditions",
     )
     args = parser.parse_args()
     st.title("Meeting summarization")
@@ -350,31 +403,38 @@ def main():
     if input_type == "":
         st.write("Script will pause until a valid option is selected")
     elif input_type != "transcript":
-        # if args.input_type != "transcript":
-        st.write("### Am audio file needs to be uploaded. Currently using demo one")
-        # extract audio from video if needed since currently only using audio for diarization
-        desired_audio_type = "wav"
-        file_name = str(args.file_path).rsplit("/", 1)[1].rsplit(".", 1)[0]
-        if ".mp4" in str(args.file_path):
-            extract_audio(desired_audio_type, args.file_path, file_name)
-
-        # extract speakers and their moments
-        pipeline_diar = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1")
-        start_end_times, speakers = dizarization_fct(
-            pipeline_diar, args.file_path, file_name, desired_audio_type
+        upload_or_not = st.selectbox(
+            "Do you want to upload a file or use the default?",
+            key="upload_or_not",
+            options=["", "Upload audio/video", "Add youtube link", "Select from existent", "Default"],
         )
-
-        # whisper now to get transcripts
-        transcriptions = get_transcriptions(
-            start_end_times, args.file_path, file_name, desired_audio_type, speakers
-        )
-
-        # get transcriptions in desired str form for future summarization
-        str_trans_sp = ""
-        for idx, transcription in enumerate(tqdm.tqdm(transcriptions)):
-            str_trans_sp += f"{speakers[idx]}: {transcription}\n "
-        # print("Transcription is:\n {str_trans_sp}")
-        generate_summary(str_trans_sp)
+        if upload_or_not == "":
+            st.write("Script is waiting for selecting something")
+        elif upload_or_not == "Default":
+            st.write("### Using demo video provided")
+            # extract audio from video if needed since currently only using audio for diarization
+            generate_summary_from_audvid(args, args.file_path)
+        elif upload_or_not in ["Upload audio/video", "Select from existent"]:
+            pass
+        elif upload_or_not == "Add youtube link":
+            youtube_id = st.text_input(
+                "Enter id of youtube meeting video  👇",
+                label_visibility="visible",
+                disabled=False,
+                placeholder="This is a placeholder",
+            )
+            if youtube_id:
+                st.write("You entered: ", youtube_id)
+                if os.path.exists(f"./data/media/{youtube_id}.mp4") is True:
+                    st.write(f"Already downloaded this video")
+                else:
+                    save_location = Path("./data/media/")
+                    save_location.mkdir(parents=True, exist_ok=True)
+                    download_full_yb(youtube_id)
+                    st.write("Finished downloading video")
+                generate_summary_from_audvid(args, Path(f"./data/media/{youtube_id}.mp4"), youtube_id)
+            else:
+                st.write("Script is waiting for inserting youtube id")
     else:
         upload_or_not = st.selectbox(
             "Do you want to upload a file or use the default?",
@@ -382,27 +442,22 @@ def main():
             options=["", "Upload", "Default", "Select from existent"],
         )
         if upload_or_not == "":
-            st.write("Script is waiting for selecting Yes or No")
+            st.write("Script is waiting for selecting one option")
         elif upload_or_not == "Default":
             st.write("### A transcript needs to be uploaded. Currently using demo one")
-            with open(args.file_path, "r") as f:
-                str_trans_sp = f.read().splitlines()
-            generate_summary(str_trans_sp, args)
+            generate_summary_from_txt(args.file_path, args)
         elif upload_or_not in ["Upload", "Select from existent"]:
             uploaded_file = st.file_uploader("Choose a .txt file", type=["txt"])
             if uploaded_file is not None:
                 file_details = {"FileName": uploaded_file.name, "FileType": uploaded_file.type}
                 st.write(file_details)
-                save_location = Path("C:/Users/oncescu/coding/meeting_summaries/data/AMICorpus/")
+                save_location = Path("./data/AMICorpus/")
                 with open(os.path.join(save_location, uploaded_file.name), "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 st.success("Saved File")
-                with open(os.path.join(save_location, uploaded_file.name), "r") as f:
-                    str_trans_sp = f.read().splitlines()
-                generate_summary(str_trans_sp, args)
+                generate_summary_from_txt(os.path.join(save_location, uploaded_file.name), args)
             else:
                 st.write("Waiting for file to be uploaded")
-
 
 
 if __name__ == "__main__":
