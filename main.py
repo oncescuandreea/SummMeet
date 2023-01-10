@@ -1,11 +1,13 @@
 import argparse
 from pathlib import Path
 
-import openai
+
 import tqdm
 from huggingface_hub import notebook_login
+
 from pyannote.audio import Pipeline
-from transformers import pipeline
+
+from summarizers.summary_models import *
 
 from rouge import Rouge
 from utils import *
@@ -35,237 +37,6 @@ def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
     return start_end_times, speakers
 
 
-def using_BART(no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_model: str):
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-
-    tokens_used_so_far = 0
-    transcription_chunk = ""
-    if no_tokens < max_tokens_model:
-        summary = summarizer(
-            f'""{str_trans_sp}""', max_length=50, min_length=10, do_sample=False
-        )
-        # print(f"When using {sum_model} summary is:\n {summary}")
-    else:
-        # print(f"There are more tokens than supported by the model.")
-        st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
-                 f"allowed context length.")
-        summaries = []
-
-        total_progress = 0.0
-        my_bar = st.progress(total_progress)
-        no_sentences = len(str_trans_sp)
-        delta_progress = 1.0 / no_sentences
-
-        for idx, sentence in enumerate(str_trans_sp):
-            if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
-                transcription_chunk += sentence
-                tokens_used_so_far += len(sentence.split())
-                to_generate_summary = True
-                # print(f"Got here with {tokens_used_so_far}")
-            else:
-                summary = summarizer(
-                    f'""{transcription_chunk}""',
-                    max_length=30,
-                    min_length=10,
-                    do_sample=False,
-                )
-                summaries.append(summary[0]["summary_text"])
-                # print(f"Current summary is {summary[0]}")
-                transcription_chunk = sentence
-                tokens_used_so_far = len(sentence.split())
-            my_bar.progress(min(1.0, total_progress + delta_progress))
-            total_progress += delta_progress
-
-        if transcription_chunk != "":
-            summary = summarizer(
-                f'""{transcription_chunk}""',
-                max_length=30,
-                min_length=10,
-                do_sample=False,
-            )
-            summaries.append(summary[0]["summary_text"])
-        # print(f"List of summaries so far: {summaries}\n")
-        concat_summaries = " ".join(summaries)
-        st.write("##### Concatenated summary is:")
-        st.write(f"#### {concat_summaries}")
-
-        # Now summarising the concatenated summaries using the same model
-        summary = summarizer(
-            f'""{concat_summaries}""',
-            max_length=150,
-            min_length=50,
-            do_sample=False,
-        )
-        # print(f"When using {sum_model} final summary is:\n {summary}")
-        st.write("##### Final summary is:")
-        st.write(f"#### {summary[0]['summary_text']}")
-    with open(f"data/bart_summaries/experiment.txt", "w") as f:
-        f.write(summary[0]["summary_text"])
-    return summary[0]["summary_text"]
-
-
-def using_GPT3(no_tokens: int, max_tokens_model: int, str_trans_sp: str, sum_model, args):
-    openai.api_key = args.openai_key
-    tokens_used_so_far = 0
-    transcription_chunk = ""
-    if no_tokens < max_tokens_model:
-        response = openai.Completion.create(
-            model="text-davinci-002",
-            prompt=f"{str_trans_sp}\nTl;dr",
-            temperature=0.3,
-            max_tokens=120,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-        )
-        print(
-            f"When using {sum_model} summary is:\n\
-                {response.choices[0].text}"
-        )
-    else:
-        st.write(f"There is more context in the transcript than this model can take in. Will slide the model over the "
-                 f"allowed context length.")
-        summaries = []
-
-        total_progress = 0.0
-        my_bar = st.progress(total_progress)
-        no_sentences = len(str_trans_sp)
-        delta_progress = 1.0 / no_sentences
-
-        for sentence in str_trans_sp:
-            if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
-                transcription_chunk += sentence
-                tokens_used_so_far += len(sentence.split())
-                to_generate_summary = True
-                # print(f"Got here with {tokens_used_so_far}")
-            else:
-                response = openai.Completion.create(
-                    model="text-davinci-002",
-                    prompt=f"{transcription_chunk}\nTl;dr",
-                    temperature=0.3,
-                    max_tokens=120,
-                    top_p=1,
-                    frequency_penalty=0,
-                    presence_penalty=0,
-                )
-                summaries.append(response.choices[0].text)
-                # print(f"Current summary is {response.choices[0].text}")
-                transcription_chunk = sentence
-                tokens_used_so_far = len(sentence.split())
-            my_bar.progress(min(1.0, total_progress + delta_progress))
-            total_progress += delta_progress
-
-        if transcription_chunk != "":
-            response = openai.Completion.create(
-                model="text-davinci-002",
-                prompt=f"{transcription_chunk}\nTl;dr",
-                temperature=0.3,
-                max_tokens=120,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
-            )
-            summaries.append(response.choices[0].text)
-            # print(f"Current summary is {response.choices[0].text}")
-        # print(f"List of summaries so far: {summaries}\n")
-        concat_summaries = " ".join(summaries)
-        # print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
-        st.write("##### Concatenated summary is:")
-        st.write(f"#### {concat_summaries}")
-
-        # Now summarising the concatenated summaries either with Tl;dr or Summarize
-        response = openai.Completion.create(
-            model="text-davinci-002",
-            prompt=f"{concat_summaries}\nTl;dr:",
-            temperature=0.6,
-            max_tokens=250,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-        )
-        # print(
-        #     f"When using {sum_model} summary is:\n\
-        #         {response.choices[0].text}"
-        # )
-        st.write("##### Concatenated summary is and passed through Tl;dr GPT3:")
-        st.write(f"#### {response.choices[0].text}")
-        with open(f"data/gpt_summaries/experiment_concat.txt", "w") as f:
-            f.write(response.choices[0].text)
-
-        response_sum = openai.Completion.create(
-            model="text-davinci-002",
-            prompt=f"{concat_summaries}\nSummarize:",
-            temperature=0.6,
-            max_tokens=250,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-        )
-        # print(
-        #     f"When using {sum_model} summary is:\n\
-        #         {response_sum.choices[0].text}"
-        # )
-        st.write("##### Concatenated summary is and passed through Summarize GPT3:")
-        st.write(f"#### {response_sum.choices[0].text}")
-        "data/gpt_summaries".mkdir(parents=True, exist_ok=True)
-    with open(f"data/gpt_summaries/experiment_short.txt", "w") as f:
-        f.write(response_sum.choices[0].text)
-
-
-def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
-    summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-
-    tokens_used_so_far = 0
-    transcription_chunk = ""
-    if no_tokens < max_tokens_model:
-        summary = summarizer(
-            f'""{str_trans_sp}""', max_length=50, min_length=10, do_sample=False
-        )
-        # print(f"When using {sum_model} summary is:\n {summary}")
-    else:
-        print(f"There are more tokens than supported by the model.")
-        summaries = []
-        for sentence in str_trans_sp:
-            if tokens_used_so_far + len(sentence.split()) <= max_tokens_model:
-                transcription_chunk += sentence
-                tokens_used_so_far += len(sentence.split())
-                to_generate_summary = True
-                # print(f"Got here with {tokens_used_so_far}")
-            else:
-                summary = summarizer(
-                    f'""{transcription_chunk}""',
-                    max_length=30,
-                    min_length=10,
-                    do_sample=False,
-                )
-                summaries.append(summary[0]["summary_text"])
-                print(f"Current summary is {summary[0]}")
-                transcription_chunk = sentence
-                tokens_used_so_far = len(sentence.split())
-
-        if transcription_chunk != "":
-            summary = summarizer(
-                f'""{transcription_chunk}""',
-                max_length=30,
-                min_length=10,
-                do_sample=False,
-            )
-            summaries.append(summary[0]["summary_text"])
-        print(f"List of summaries so far: {summaries}\n")
-        concat_summaries = " ".join(summaries)
-        print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
-        summary = summarizer(
-            f'""{transcription_chunk}""',
-            max_length=150,
-            min_length=50,
-            do_sample=False,
-        )
-        print(f"When using {sum_model} final summary is:\n {summary}")
-    with open(f"data/bart_summaries/experiment.txt", "w") as f:
-        f.write(summary[0]["summary_text"])
-    return summary[0]["summary_text"]
-
-
 def generate_summary(str_trans_sp, args):
     st.write("Input transcription is:", str_trans_sp)
     no_tokens = 0
@@ -276,10 +47,11 @@ def generate_summary(str_trans_sp, args):
     # summarize using chosen models
     options = st.multiselect(
         'What model/models do you want to use? Select the label "Done" when you are done',
-        options=['', 'BART', 'GPT3', 'Done', 'Blue'])
-    if options == '':
+        options=["", "BART", "GPT3", "Done", "Blue"],
+    )
+    if options == "":
         st.write("Script will pause until a valid option is selected")
-    elif 'Done' not in options:
+    elif "Done" not in options:
         st.write("Script will pause until label 'Done' is also added")
     else:
         st.write(f"Using the following models:  {options}")
@@ -322,21 +94,21 @@ def generate_summary_from_audvid(args, file_path, youtube_id=None):
         file_name = str(file_path).rsplit("\\", 1)[1].rsplit(".", 1)[0]
     else:
         file_name = str(file_path).rsplit("/", 1)[1].rsplit(".", 1)[0]
-    if ".mp4" in str(file_path):
-        st.write("Extracting audio from video")
+    if ".mp4" in str(file_path) or ".mkv" in str(file_path):
         extract_audio(desired_audio_type, file_path, file_name)
 
     # extract speakers and their moments
-    pipeline_diar = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1",
-                                             use_auth_token=args.diar_auth_key)
+    pipeline_diar = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization@2.1", use_auth_token=args.diar_auth_key
+    )
 
-    st.write("Now diarizing speech to obtain time intervals for each utterance")
+    st.write("### 1. Now diarizing speech to obtain time intervals for each utterance")
     start_end_times, speakers = dizarization_fct(
         pipeline_diar, file_path, file_name, desired_audio_type
     )
 
     # whisper now to get transcripts
-    st.write("Now using Whisper to get transcriptions")
+    st.write("### 2. Please wait while Whisper extracts transcriptions")
     transcriptions = get_transcriptions(
         start_end_times, file_path, file_name, desired_audio_type, speakers
     )
@@ -347,9 +119,17 @@ def generate_summary_from_audvid(args, file_path, youtube_id=None):
     total_progress = 0.0
     my_bar = st.progress(total_progress)
     delta_progress = 1.0 / no_utterances
-    st.write("Now generating txt file containing transcript")
+    st.write("### 3. Now generating txt file containing transcript")
+    prev_speaker = speakers[0]
     for idx, transcription in enumerate(tqdm.tqdm(transcriptions)):
-        str_trans_sp += f"{speakers[idx]}: {transcription}\n "
+        if idx == 0:
+            str_trans_sp += f"{speakers[idx]}: {transcription}."
+        else:
+            if speakers[idx] == prev_speaker:
+                str_trans_sp += f" {transcription}."
+            else:
+                str_trans_sp += f"\n{speakers[idx]}: {transcription}."
+                prev_speaker = speakers[idx]
         my_bar.progress(min(1.0, total_progress + delta_progress))
         total_progress += delta_progress
     (Path("./data/transcripts")).mkdir(parents=True, exist_ok=True)
@@ -360,9 +140,9 @@ def generate_summary_from_audvid(args, file_path, youtube_id=None):
         with open(Path(f"./data/transcripts/your_transcript.txt"), "w") as f:
             f.write(str_trans_sp)
     # print("Transcription is:\n {str_trans_sp}")
-    st.write("Transcript is:")
+    st.write("## Transcript is:")
     st.write(str_trans_sp)
-    # generate_summary(str_trans_sp, args)
+    generate_summary(str_trans_sp, args)
 
 
 def main():
@@ -403,15 +183,41 @@ def main():
         upload_or_not = st.selectbox(
             "Do you want to upload a file or use the default?",
             key="upload_or_not",
-            options=["", "Upload audio/video", "Add youtube link", "Select from existent", "Default"],
+            options=[
+                "",
+                "Upload audio/video",
+                "Add youtube link",
+                "Select from existent",
+                "Default",
+            ],
         )
         if upload_or_not == "":
             st.write("Script is waiting for selecting something")
         elif upload_or_not == "Default":
-            st.write("### Using demo video provided")
+            st.write("### Using demo video provided. There's no video provided yet.")
             # extract audio from video if needed since currently only using audio for diarization
+            pass
             generate_summary_from_audvid(args, args.file_path)
-        elif upload_or_not in ["Upload audio/video", "Select from existent"]:
+        elif upload_or_not == "Select from existent":
+            full_opt_list = [""]
+            existent_videos = os.listdir("./data/media")
+            existent_videos = [
+                video for video in existent_videos if "mp4" or "mkv" in video
+            ]
+            full_opt_list.extend(existent_videos)
+            uploaded_file = st.selectbox(
+                "Select from existent files",
+                key="select_preexisting",
+                options=full_opt_list,
+            )
+            if uploaded_file is not "":
+                generate_summary_from_audvid(
+                    args,
+                    Path(f"./data/media/{uploaded_file}"),
+                )
+            else:
+                st.write("Waiting for your selection")
+        elif upload_or_not == "Upload audio/video":
             pass
         elif upload_or_not == "Add youtube link":
             youtube_id = st.text_input(
@@ -421,15 +227,22 @@ def main():
                 placeholder="This is a placeholder",
             )
             if youtube_id:
-                st.write("You entered: ", youtube_id)
+                # st.write("You entered: ", youtube_id)
                 if os.path.exists(f"./data/media/{youtube_id}.mp4") is True:
                     st.write(f"Already downloaded this video")
+                    ext = ".mp4"
+                elif os.path.exists(f"./data/media/{youtube_id}.mkv") is True:
+                    st.write(f"Already downloaded this video")
+                    ext = ".mkv"
                 else:
                     save_location = Path("./data/media/")
                     save_location.mkdir(parents=True, exist_ok=True)
                     download_full_yb(youtube_id)
                     st.write("Finished downloading video")
-                generate_summary_from_audvid(args, Path(f"./data/media/{youtube_id}.mp4"), youtube_id)
+                    ext = ".mp4"
+                generate_summary_from_audvid(
+                    args, Path(f"./data/media/{youtube_id}{ext}"), youtube_id
+                )
             else:
                 st.write("Script is waiting for inserting youtube id")
     else:
@@ -446,13 +259,18 @@ def main():
         elif upload_or_not in ["Upload", "Select from existent"]:
             uploaded_file = st.file_uploader("Choose a .txt file", type=["txt"])
             if uploaded_file is not None:
-                file_details = {"FileName": uploaded_file.name, "FileType": uploaded_file.type}
+                file_details = {
+                    "FileName": uploaded_file.name,
+                    "FileType": uploaded_file.type,
+                }
                 st.write(file_details)
                 save_location = Path("./data/AMICorpus/")
                 with open(os.path.join(save_location, uploaded_file.name), "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 st.success("Saved File")
-                generate_summary_from_txt(os.path.join(save_location, uploaded_file.name), args)
+                generate_summary_from_txt(
+                    os.path.join(save_location, uploaded_file.name), args
+                )
             else:
                 st.write("Waiting for file to be uploaded")
 

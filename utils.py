@@ -21,16 +21,18 @@ def extract_audio(desired_audio_type, file_path, file_name):
         video = VideoFileClip(str(file_path))
         # if os.path.exists(file_path.parent / f"{file_name}.mp3") is False:
         if os.path.exists(os.path.join(file_path.parent, f"{file_name}.mp3")) is False:
-            video.audio.write_audiofile(str(os.path.join(file_path.parent, f"{file_name}.mp3")))
+            st.write("Extracting audio from video")
+            video.audio.write_audiofile(
+                str(os.path.join(file_path.parent, f"{file_name}.mp3"))
+            )
         else:
             st.write("Already extracted mp3 version of this video")
     elif desired_audio_type == "wav":
-        st.write("Got hereee")
         # if os.path.exists(file_path.parent / f"{file_name}.wav") is False:
         if os.path.exists(os.path.join(file_path.parent, f"{file_name}.wav")) is False:
-            st.write("Got hereee 2")
+            st.write("Extracting audio from video")
             command = f"ffmpeg -i {str(file_path)} -ab 160k -ac 2 -ar 44100 -vn {str(os.path.join(file_path.parent, f'{file_name}.wav'))}"
-            st.write(f"{os.path.join(file_path.parent, f'{file_name}.wav')}")
+            # st.write(f"{os.path.join(file_path.parent, f'{file_name}.wav')}")
             subprocess.call(command, shell=True)
         else:
             st.write("Already extracted wav version of this video")
@@ -42,7 +44,11 @@ def get_transcriptions(
     # https://stackoverflow.com/questions/37999150/how-to-split-a-wav-file-into-multiple-wav-files
     model = whisper.load_model("base")
     transcriptions = []
-    for idx, start_end_pairs in enumerate(tqdm.tqdm(start_end_times[:2])):
+    no_utterances = len(start_end_times)
+    total_progress = 0.0
+    my_bar = st.progress(total_progress)
+    delta_progress = 1.0 / no_utterances
+    for idx, start_end_pairs in enumerate(tqdm.tqdm(start_end_times)):
         t1 = start_end_pairs[0] * 1000  # Works in milliseconds
         t2 = start_end_pairs[1] * 1000
         newAudio = AudioSegment.from_wav(
@@ -58,6 +64,8 @@ def get_transcriptions(
         #     test_meeting_0_tr = model.transcribe("/scratch/shared/beegfs/oncescu/shared-datasets/dialogue/test_meeting_0.wav")
         # print(f"{speakers[idx]}:{test_meeting_0_tr}\n")
         transcriptions.append(test_meeting_0_tr["text"])
+        my_bar.progress(min(1.0, total_progress + delta_progress))
+        total_progress += delta_progress
     return transcriptions
 
 
@@ -65,11 +73,11 @@ def download_audio_only(cwd, youtube_id):
 
     # for video_link in list_video_links:
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [],
-        'writeinfojson': True,
-        'writesubtitles': True,
-        'outtmpl': "/data/media/%(title)s.%(ext)s",
+        "format": "bestaudio/best",
+        "postprocessors": [],
+        "writeinfojson": True,
+        "writesubtitles": True,
+        "outtmpl": "./data/media/%(title)s.%(ext)s",
     }
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([f"http://www.youtube.com/watch?v={youtube_id}"])
@@ -79,10 +87,12 @@ def download_full_yb(youtube_id):
 
     # for video_link in list_video_links:
     ydl_opts = {
-        'postprocessors': [],
-        'format': 134,
+        "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
+        "videoformat": "mp4",
+        "postprocessors": [],
+        # 'format': 134,
         # 'outtmpl': "/data/media/%(title)s.%(ext)s",
-        'outtmpl': f"/data/media/{youtube_id}.%(ext)s",
+        "outtmpl": f"./data/media/{youtube_id}.%(ext)s",
     }
 
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
