@@ -318,13 +318,10 @@ def generate_summary_from_txt(file_loc, args):
 
 def generate_summary_from_audvid(args, file_path, youtube_id=None):
     desired_audio_type = "wav"
-    st.write(file_path)
-    st.write(file_path.parent)
     if "win" in platform:
         file_name = str(file_path).rsplit("\\", 1)[1].rsplit(".", 1)[0]
     else:
         file_name = str(file_path).rsplit("/", 1)[1].rsplit(".", 1)[0]
-    st.write(file_name)
     if ".mp4" in str(file_path):
         st.write("Extracting audio from video")
         extract_audio(desired_audio_type, file_path, file_name)
