@@ -15,6 +15,11 @@ conda env create -f environment_gpu.yml
 --------------------
 ### Running the code
 
+
+```
+export PYTHONPATH=.
+```
+
 To run this codebase without GPT or diarization, just run the following lines:
 ```
 streamlit run main.py 

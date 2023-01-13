@@ -87,10 +87,19 @@ def download_full_yb(youtube_id):
 
     # for video_link in list_video_links:
     ydl_opts = {
-        # "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-        "format": "bestvideo[mp4]+bestaudio[ext=m4a/best[mp4]",
+        "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
+        # "format": "bestvideo[mp4]+bestaudio[ext=m4a]/best[mp4]",
         # "videoformat": "mp4",
-        "postprocessors": [],
+        # 'format': 134,
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',  # one of avi, flv, mkv, mp4, ogg, webm
+            },
+            # {
+            #     'key': 'FFmpegExtractAudio',  # what to use for video format converting?
+            #     'preferredcodec': 'wav',  # what to use for video format converting?
+            # }
+        ],
         # 'format': 134,
         # 'outtmpl': "/data/media/%(title)s.%(ext)s",
         "outtmpl": f"./data/media/{youtube_id}.%(ext)s",
@@ -98,3 +107,20 @@ def download_full_yb(youtube_id):
 
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([f"http://www.youtube.com/watch?v={youtube_id}"])
+
+
+def dizarization_fct(pipeline_diar, file_path, file_name, desired_audio_type):
+    """
+    Extract start and end times for each speaker and the corresponding speakers
+    for each time interval.
+    """
+    diarization = pipeline_diar(
+        str(file_path.parent / f"{file_name}.{desired_audio_type}")
+    )
+    start_end_times = []
+    speakers = []
+    for turn, _, speaker in diarization.itertracks(yield_label=True):
+        # print(f"start={turn.start:.1f}s stop={turn.end:.1f}s speaker_{speaker}")
+        start_end_times.append((turn.start, turn.end))
+        speakers.append(speaker)
+    return start_end_times, speakers

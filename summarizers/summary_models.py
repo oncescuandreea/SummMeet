@@ -3,6 +3,51 @@ import openai
 import streamlit as st
 
 
+def generate_summary(str_trans_sp, args):
+    st.write("Input transcription is:", str_trans_sp)
+    no_tokens = 0
+    for utterance in str_trans_sp:
+        no_tokens += len(utterance.split())
+    st.write(f"There are {no_tokens} tokens in this transcript separated by spaces")
+
+    # summarize using chosen models
+    options = st.multiselect(
+        'What model/models do you want to use? Select the label "Done" when you are done',
+        options=["", "BART", "GPT3", "Done", "Blue"],
+    )
+    if options == "":
+        st.write("Script will pause until a valid option is selected")
+    elif "Done" not in options:
+        st.write("Script will pause until label 'Done' is also added")
+    else:
+        st.write(f"Using the following models:  {options}")
+        # models = ["BART", "GPT3"]
+        models = [option for option in options if option != "Done"]
+        # models = ["BART"]
+        max_tokens_real = {
+            "BART": 1024,
+            "GPT3": 2048,
+            "DialogueLM": 5120,
+            "DialogueLMSparse": 8192,
+        }
+        max_tokens = {
+            "BART": 600,
+            "GPT3": 1600,
+            "DialogueLM": 4700,
+            "DialogueLMSparse": 7600,
+        }  # number of tokens is not exactly number of words so using a lower upper limit
+        for sum_model in models:
+            st.write(f"## Using {sum_model} for summarization")
+            assert sum_model in ["BART", "GPT3"], "Model not supported yet"
+            max_tokens_model = max_tokens[sum_model]
+            if sum_model == "BART":
+                using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+            elif sum_model == "GPT3":
+                using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model, args)
+            elif sum_model == "Longformer":
+                using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+
+
 def using_BART(
     no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_model: str
 ):
