@@ -33,21 +33,25 @@ def generate_summary_from_vid(args, file_path, youtube_id=None):
     )
 
     # get transcriptions in desired str form for future summarization
+    st.write("### 3. Now generating txt file containing transcript")
     str_trans_sp = ""
     no_utterances = len(transcriptions)
     total_progress = 0.0
     my_bar = st.progress(total_progress)
     delta_progress = 1.0 / no_utterances
-    st.write("### 3. Now generating txt file containing transcript")
     prev_speaker = speakers[0]
     for idx, transcription in enumerate(tqdm.tqdm(transcriptions)):
         if idx == 0:
-            str_trans_sp += f"{speakers[idx]}: {transcription}."
+            # Uncomment line below if you want to use speaker information too
+            # str_trans_sp += f"{speakers[idx]}: {transcription}."
+            str_trans_sp += f"{transcription}."
         else:
             if speakers[idx] == prev_speaker:
                 str_trans_sp += f" {transcription}."
             else:
-                str_trans_sp += f"\n{speakers[idx]}: {transcription}."
+                # Uncomment line below if you want to use speaker information too
+                # str_trans_sp += f"\n{speakers[idx]}: {transcription}."
+                str_trans_sp += f"\n{transcription}."
                 prev_speaker = speakers[idx]
         my_bar.progress(min(1.0, total_progress + delta_progress))
         total_progress += delta_progress
@@ -56,7 +60,7 @@ def generate_summary_from_vid(args, file_path, youtube_id=None):
         with open(Path(f"./data/transcripts/{youtube_id}.txt"), "w") as f:
             f.write(str_trans_sp)
     else:
-        with open(Path(f"./data/transcripts/your_transcript.txt"), "w") as f:
+        with open(Path(f"./data/transcripts/{file_name}.txt"), "w") as f:
             f.write(str_trans_sp)
     # print("Transcription is:\n {str_trans_sp}")
     st.write("## Transcript is:")

@@ -57,9 +57,10 @@ def using_BART(
     transcription_chunk = ""
     if no_tokens < max_tokens_model:
         summary = summarizer(
-            f'""{str_trans_sp}""', max_length=50, min_length=10, do_sample=False
+            f'""{str_trans_sp}""', max_length=30, min_length=10, do_sample=False
         )
-        # print(f"When using {sum_model} summary is:\n {summary}")
+        st.write("##### Final summary is:")
+        st.write(f"#### {summary[0]['summary_text']}")
     else:
         # print(f"There are more tokens than supported by the model.")
         st.write(
@@ -137,10 +138,8 @@ def using_GPT3(
             frequency_penalty=0,
             presence_penalty=0,
         )
-        print(
-            f"When using {sum_model} summary is:\n\
-                {response.choices[0].text}"
-        )
+        st.write("##### Transcription passed through Tl;dr GPT3:")
+        st.write(f"#### {response.choices[0].text}")
     else:
         st.write(
             f"There is more context in the transcript than this model can take in. Will slide the model over the "
