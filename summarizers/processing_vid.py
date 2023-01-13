@@ -81,7 +81,7 @@ def process_video_and_selection(args,):
         full_opt_list = [""]
         existent_videos = os.listdir("./data/media")
         existent_videos = [
-            video for video in existent_videos if "mp4" or "mkv" in video
+            video for video in existent_videos if any(ext in video for ext in ('mp4', 'mkv'))
         ]
         full_opt_list.extend(existent_videos)
         uploaded_file = st.selectbox(
@@ -96,8 +96,8 @@ def process_video_and_selection(args,):
             )
         else:
             st.write("Waiting for your selection")
-    elif upload_or_not == "Upload audio/video":
-        uploaded_file = st.file_uploader("Choose a media file", type=["mp4"])
+    elif upload_or_not == "Upload video":
+        uploaded_file = st.file_uploader("Choose a media file", type=["mp4", "mkv"])
         if uploaded_file is not None:
             file_details = {
                 "FileName": uploaded_file.name,

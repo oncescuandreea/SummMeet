@@ -1,17 +1,12 @@
 import argparse
 from pathlib import Path
 
-
-from summarizers.summary_models import *
 from summarizers.processing_vid import process_video_and_selection
 from summarizers.processing_txt import process_text_and_selection
-from summarizers.processing_aud import process_aud_and_selection
+from summarizers.processing_aud import process_audio_and_selection
 
 from rouge import Rouge
-from utils import *
 import streamlit as st
-
-from io import StringIO
 
 from pathlib import Path
 
