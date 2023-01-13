@@ -13,7 +13,7 @@ def generate_summary_from_txt(file_loc, args):
 
 def process_text_and_selection(args,):
     upload_or_not = st.selectbox(
-        "Do you want to upload a file or use the default?",
+        "Do you want to upload a file, use the default or select from existent?",
         key="upload_or_not",
         options=["", "Upload", "Default", "Select from existent"],
     )

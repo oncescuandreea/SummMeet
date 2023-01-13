@@ -66,11 +66,11 @@ def generate_summary_from_vid(args, file_path, youtube_id=None):
 
 def process_video_and_selection(args,):
     upload_or_not = st.selectbox(
-        "Do you want to upload a file or use the default?",
+        "Do you want to upload a file, download a meeting video from youtube or use existent files?",
         key="upload_or_not",
         options=[
             "",
-            "Upload audio/video",
+            "Upload video",
             "Add youtube link",
             "Select from existent",
         ],

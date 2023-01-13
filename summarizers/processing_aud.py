@@ -61,11 +61,11 @@ def generate_summary_from_aud(args, file_path):
 
 def process_audio_and_selection(args):
     upload_or_not = st.selectbox(
-        "Do you want to upload a file or use the default?",
+        "Do you want to upload a file or use existent ones?",
         key="upload_or_not",
         options=[
             "",
-            "Upload audio/video",
+            "Upload audio",
             "Select from existent",
         ],
     )
