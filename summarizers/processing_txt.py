@@ -5,7 +5,7 @@ from pathlib import Path
 from utils import *
 
 
-def generate_summary_from_txt(file_loc, args):
+def generate_summary_from_txt(args, file_loc):
     with open(file_loc, "r") as f:
         str_trans_sp = f.read().splitlines()
     generate_summary(str_trans_sp, args)
@@ -21,7 +21,7 @@ def process_text_and_selection(args,):
         st.write("Script is waiting for selecting one option")
     elif upload_or_not == "Default":
         st.write("### A transcript needs to be uploaded. Currently using demo one")
-        generate_summary_from_txt(args.file_path, args)
+        generate_summary_from_txt(args, args.file_path)
     elif upload_or_not == "Upload":
         uploaded_file = st.file_uploader("Choose a .txt file", type=["txt"])
         if uploaded_file is not None:
@@ -35,7 +35,8 @@ def process_text_and_selection(args,):
                 f.write(uploaded_file.getbuffer())
             st.success("Saved File")
             generate_summary_from_txt(
-                os.path.join(save_location, uploaded_file.name), args
+                args,
+                os.path.join(save_location, uploaded_file.name),
             )
         else:
             st.write("Waiting for file to be uploaded")
@@ -53,7 +54,7 @@ def process_text_and_selection(args,):
             options=full_opt_list,
         )
         if uploaded_file != "":
-            generate_summary_from_audvid(
+            generate_summary_from_txt(
                 args,
                 Path(f"./data/media/{uploaded_file}"),
             )
