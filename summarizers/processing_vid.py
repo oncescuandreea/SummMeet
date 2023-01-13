@@ -63,8 +63,8 @@ def generate_summary_from_vid(args, file_path, youtube_id=None):
         with open(Path(f"./data/transcripts/{file_name}.txt"), "w") as f:
             f.write(str_trans_sp)
     # print("Transcription is:\n {str_trans_sp}")
-    st.write("## Transcript is:")
-    st.write(str_trans_sp)
+    # st.write("## Transcript is:")
+    # st.write(str_trans_sp)
     generate_summary(str_trans_sp, args)
 
 
