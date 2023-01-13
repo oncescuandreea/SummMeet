@@ -56,7 +56,7 @@ def process_text_and_selection(args,):
         if uploaded_file != "":
             generate_summary_from_txt(
                 args,
-                Path(f"./data/media/{uploaded_file}"),
+                Path(f"./data/AMICorpus/{uploaded_file}"),
             )
         else:
             st.write("Waiting for your selection")
