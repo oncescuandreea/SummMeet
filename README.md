@@ -12,10 +12,18 @@ If GPU is available (considerably faster), install the environment using this co
 conda env create -f environment_gpu.yml
 ```
 
+If the diarization module is used or BART is used, running the code on CPU is extremely slow. \
+We recommend running this codebased on a GPU.
+
+Normally the loading of the start page takes about 30-60 seconds. Using BART as a summarizer is
+performing poorly and it is also slow. We recommend using GPT3.
+
+To re-start the experiments, refresh the page.
+
 --------------------
 ### Running the code
 
-
+To make sure the code runs with no errors of not finding imports, run the following command:
 ```
 export PYTHONPATH=.
 ```
