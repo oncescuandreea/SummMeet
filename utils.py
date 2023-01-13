@@ -87,8 +87,9 @@ def download_full_yb(youtube_id):
 
     # for video_link in list_video_links:
     ydl_opts = {
-        "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
-        "videoformat": "mp4",
+        # "format": "bestvideo[height<=480]+bestaudio/best[height<=480]",
+        "format": "bestvideo[mp4]+bestaudio[ext=m4a/best[mp4]",
+        # "videoformat": "mp4",
         "postprocessors": [],
         # 'format': 134,
         # 'outtmpl': "/data/media/%(title)s.%(ext)s",

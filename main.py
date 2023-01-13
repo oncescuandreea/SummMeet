@@ -256,7 +256,7 @@ def main():
         elif upload_or_not == "Default":
             st.write("### A transcript needs to be uploaded. Currently using demo one")
             generate_summary_from_txt(args.file_path, args)
-        elif upload_or_not in ["Upload", "Select from existent"]:
+        elif upload_or_not == "Upload":
             uploaded_file = st.file_uploader("Choose a .txt file", type=["txt"])
             if uploaded_file is not None:
                 file_details = {
@@ -273,6 +273,26 @@ def main():
                 )
             else:
                 st.write("Waiting for file to be uploaded")
+        elif upload_or_not == "Select from existent":
+            save_location = Path("./data/AMICorpus/")
+            full_opt_list = [""]
+            existent_videos = os.listdir(save_location)
+            existent_videos = [
+                video for video in existent_videos if "mp4" or "mkv" in video
+            ]
+            full_opt_list.extend(existent_videos)
+            uploaded_file = st.selectbox(
+                "Select from existent files",
+                key="select_preexisting",
+                options=full_opt_list,
+            )
+            if uploaded_file is not "":
+                generate_summary_from_audvid(
+                    args,
+                    Path(f"./data/media/{uploaded_file}"),
+                )
+            else:
+                st.write("Waiting for your selection")
 
 
 if __name__ == "__main__":
