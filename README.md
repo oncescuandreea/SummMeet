@@ -45,7 +45,7 @@ streamlit run main.py --server.fileWatcherType none --server.port 2084
 
 Need to add in the main.py your own OpenAI token for this to work in case GPT is used for summarization. Then run:
 ```
-streamlit run main.py -- --open_ai_key <your openai aauthentication key>
+streamlit run main.py -- --openai_key <your openai aauthentication key>
 ```
 
 Text file containing transcript needs to have the utterances of each speaker on a new line. One example is provided [here](https://github.com/oncescuandreea/meeting_summaries/blob/0cba5f346e7780f1fb2df405856f656f90340787/data/AMICorpus/ES2008a.transcript.txt)
