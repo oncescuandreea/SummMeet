@@ -1,9 +1,11 @@
-from transformers import pipeline
+from pathlib import Path
+
 import openai
 import streamlit as st
+from transformers import pipeline
 
 
-def generate_summary(str_trans_sp, args):
+def generate_summary(str_trans_sp, args, file_name="default.txt"):
     st.write("Input transcription is:", str_trans_sp)
     no_tokens = 0
     for utterance in str_trans_sp:
@@ -31,7 +33,7 @@ def generate_summary(str_trans_sp, args):
             "DialogueLMSparse": 8192,
         }
         max_tokens = {
-            "BART": 600,
+            "BART": 400,
             "GPT3": 1600,
             "DialogueLM": 4700,
             "DialogueLMSparse": 7600,
@@ -41,20 +43,36 @@ def generate_summary(str_trans_sp, args):
             assert sum_model in ["BART", "GPT3"], "Model not supported yet"
             max_tokens_model = max_tokens[sum_model]
             if sum_model == "BART":
-                using_BART(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+                using_BART(
+                    no_tokens, max_tokens_model, str_trans_sp, sum_model, file_name
+                )
             elif sum_model == "GPT3":
-                using_GPT3(no_tokens, max_tokens_model, str_trans_sp, sum_model, args)
+                using_GPT3(
+                    no_tokens,
+                    max_tokens_model,
+                    str_trans_sp,
+                    sum_model,
+                    args,
+                    file_name,
+                )
             elif sum_model == "Longformer":
-                using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model)
+                using_Longformer(
+                    no_tokens, max_tokens_model, str_trans_sp, sum_model, file_name
+                )
 
 
 def using_BART(
-    no_tokens: int, max_tokens_model: int, str_trans_sp: dict, sum_model: str
+    no_tokens: int,
+    max_tokens_model: int,
+    str_trans_sp: dict,
+    sum_model: str,
+    file_name: str,
 ):
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
     tokens_used_so_far = 0
     transcription_chunk = ""
+    Path("./data/bart_summaries").mkdir(parents=True, exist_ok=True)
     if no_tokens < max_tokens_model:
         summary = summarizer(
             f'""{str_trans_sp}""', max_length=30, min_length=10, do_sample=False
@@ -103,10 +121,11 @@ def using_BART(
             )
             summaries.append(summary[0]["summary_text"])
         # print(f"List of summaries so far: {summaries}\n")
-        concat_summaries = " ".join(summaries)
+        concat_summaries = "\n".join(summaries)
         st.write("##### Concatenated summary is:")
         st.write(f"#### {concat_summaries}")
-
+        with open(f"data/bart_summaries/{file_name}_concat.txt", "w") as f:
+            f.write(concat_summaries)
         # Now summarising the concatenated summaries using the same model
         summary = summarizer(
             f'""{concat_summaries}""',
@@ -117,17 +136,23 @@ def using_BART(
         # print(f"When using {sum_model} final summary is:\n {summary}")
         st.write("##### Final summary is:")
         st.write(f"#### {summary[0]['summary_text']}")
-    with open(f"data/bart_summaries/experiment.txt", "w") as f:
+    with open(f"data/bart_summaries/{file_name}.txt", "w") as f:
         f.write(summary[0]["summary_text"])
     return summary[0]["summary_text"]
 
 
 def using_GPT3(
-    no_tokens: int, max_tokens_model: int, str_trans_sp: str, sum_model, args
+    no_tokens: int,
+    max_tokens_model: int,
+    str_trans_sp: str,
+    sum_model,
+    args,
+    file_name: str,
 ):
     openai.api_key = args.openai_key
     tokens_used_so_far = 0
     transcription_chunk = ""
+    Path("./data/gpt_summaries").mkdir(parents=True, exist_ok=True)
     if no_tokens < max_tokens_model:
         response = openai.Completion.create(
             model="text-davinci-002",
@@ -188,17 +213,19 @@ def using_GPT3(
             summaries.append(response.choices[0].text)
             # print(f"Current summary is {response.choices[0].text}")
         # print(f"List of summaries so far: {summaries}\n")
-        concat_summaries = " ".join(summaries)
+        concat_summaries = "\n".join(summaries)
         # print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
         st.write("##### Concatenated summary is:")
         st.write(f"#### {concat_summaries}")
+        with open(f"data/gpt_summaries/{file_name}_concat.txt", "w") as f:
+            f.write(concat_summaries)
 
         # Now summarising the concatenated summaries either with Tl;dr or Summarize
         response = openai.Completion.create(
             model="text-davinci-002",
             prompt=f"{concat_summaries}\nTl;dr:",
             temperature=0.6,
-            max_tokens=250,
+            max_tokens=350,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0,
@@ -209,14 +236,14 @@ def using_GPT3(
         # )
         st.write("##### Concatenated summary is and passed through Tl;dr GPT3:")
         st.write(f"#### {response.choices[0].text}")
-        with open(f"data/gpt_summaries/experiment_concat.txt", "w") as f:
+        with open(f"data/gpt_summaries/{file_name}_short_tldr.txt", "w") as f:
             f.write(response.choices[0].text)
 
         response_sum = openai.Completion.create(
             model="text-davinci-002",
             prompt=f"{concat_summaries}\nSummarize:",
             temperature=0.6,
-            max_tokens=250,
+            max_tokens=350,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0,
@@ -227,16 +254,19 @@ def using_GPT3(
         # )
         st.write("##### Concatenated summary is and passed through Summarize GPT3:")
         st.write(f"#### {response_sum.choices[0].text}")
-        "data/gpt_summaries".mkdir(parents=True, exist_ok=True)
-    with open(f"data/gpt_summaries/experiment_short.txt", "w") as f:
+    with open(f"data/gpt_summaries/{file_name}_short_summarize.txt", "w") as f:
         f.write(response_sum.choices[0].text)
 
 
-def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
+def using_Longformer(
+    no_tokens, max_tokens_model, str_trans_sp, sum_model, file_name: str
+):
+    # !!!!!!!!!!!! This is just bart copied over
     summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
     tokens_used_so_far = 0
     transcription_chunk = ""
+    Path("data/longformer_summaries").mkdir(parents=True, exist_ok=True)
     if no_tokens < max_tokens_model:
         summary = summarizer(
             f'""{str_trans_sp}""', max_length=50, min_length=10, do_sample=False
@@ -276,11 +306,11 @@ def using_Longformer(no_tokens, max_tokens_model, str_trans_sp, sum_model):
         print(f"no tokens in concat summary is {len(concat_summaries.split())}\n")
         summary = summarizer(
             f'""{transcription_chunk}""',
-            max_length=150,
+            max_length=200,
             min_length=50,
             do_sample=False,
         )
         print(f"When using {sum_model} final summary is:\n {summary}")
-    with open(f"data/bart_summaries/experiment.txt", "w") as f:
+    with open(f"data/longformer_summaries/experiment.txt", "w") as f:
         f.write(summary[0]["summary_text"])
     return summary[0]["summary_text"]

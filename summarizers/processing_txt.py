@@ -1,17 +1,24 @@
 from summarizers.summary_models import generate_summary
 import streamlit as st
 import os
+from sys import platform
 from pathlib import Path
 from utils import *
 
 
-def generate_summary_from_txt(args, file_loc):
-    with open(file_loc, "r") as f:
+def generate_summary_from_txt(args, file_path):
+    with open(file_path, "r") as f:
         str_trans_sp = f.read().splitlines()
-    generate_summary(str_trans_sp, args)
+    if "win" in platform:
+        file_name, _ = str(file_path).rsplit("\\", 1)[1].rsplit(".", 1)
+    else:
+        file_name, _ = str(file_path).rsplit("/", 1)[1].rsplit(".", 1)
+    generate_summary(str_trans_sp, args, file_name)
 
 
-def process_text_and_selection(args,):
+def process_text_and_selection(
+    args,
+):
     upload_or_not = st.selectbox(
         "Do you want to upload a file, use the default or select from existent?",
         key="upload_or_not",
